@@ -26,6 +26,7 @@
 #include "IRMutator.h"
 #include "IROperator.h"
 #include "IRPrinter.h"
+#include "LiftCalls.h"
 #include "Memoization.h"
 #include "PartitionLoops.h"
 #include "Profiling.h"
@@ -76,6 +77,9 @@ Stmt lower(vector<Function> outputs, const string &pipeline_name, const Target &
     // Try to simplify the RHS/LHS of a function definition by propagating its
     // specializations' conditions
     simplify_specializations(env);
+
+    // Apply the 'lift' directives
+    env = lift_func_calls(env);
 
     // Substitute in wrapper Funcs
     env = wrap_func_calls(env);

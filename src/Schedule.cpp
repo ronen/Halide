@@ -23,6 +23,7 @@ struct ScheduleContents {
     std::vector<StorageDim> storage_dims;
     std::vector<Bound> bounds;
     std::map<std::string, IntrusivePtr<Internal::FunctionContents>> wrappers;
+    std::vector<IntrusivePtr<Internal::DefinitionContents>> lifted_funcs;
     ReductionDomain reduction_domain;
     bool memoized;
     bool touched;
@@ -157,6 +158,15 @@ void Schedule::add_wrapper(const std::string &f,
         }
     }
     contents->wrappers[f] = wrapper;
+}
+
+const std::vector<IntrusivePtr<Internal::DefinitionContents>> &Schedule::lifted_funcs() const {
+    return contents->lifted_funcs;
+}
+
+void Schedule::add_lifted_func(const IntrusivePtr<Internal::DefinitionContents> &def) {
+    internal_assert(def.defined());
+    contents->lifted_funcs.push_back(def);
 }
 
 LoopLevel &Schedule::store_level() {

@@ -311,6 +311,7 @@ SOURCE_FILES = \
   IRVisitor.cpp \
   JITModule.cpp \
   Lerp.cpp \
+  LiftCalls.cpp \
   LLVM_Output.cpp \
   LLVM_Runtime_Linker.cpp \
   Lower.cpp \
@@ -442,6 +443,7 @@ HEADER_FILES = \
   JITModule.h \
   Lambda.h \
   Lerp.h \
+  LiftCalls.h \
   LLVM_Output.h \
   LLVM_Runtime_Linker.h \
   Lower.h \

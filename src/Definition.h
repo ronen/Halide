@@ -50,6 +50,12 @@ public:
     /** Construct an empty Definition. By default, it is a init definition. */
     EXPORT Definition();
 
+    /** Get a handle on the function definition contents that this Definition
+     * represents. */
+    IntrusivePtr<DefinitionContents> get_contents() const {
+        return contents;
+    }
+
     /** Return a deep copy of this Definition. It recursively deep copies all
      * called functions, schedules, and reduction domains. This method
      * takes a map of <old FunctionContents, deep-copied version> as input and

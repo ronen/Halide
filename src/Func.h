@@ -45,13 +45,26 @@ struct VarOrRVar {
 /** A single definition of a Func. May be a pure or update definition. */
 class Stage {
     Internal::Definition definition;
+    std::string stage_name;
+    std::vector<Var> pure_args; // Pure args of the Function
+
     void set_dim_type(VarOrRVar var, Internal::ForType t);
     void set_dim_device_api(VarOrRVar var, DeviceAPI device_api);
     void split(const std::string &old, const std::string &outer, const std::string &inner, Expr factor, bool exact, TailStrategy tail);
-    std::string stage_name;
 public:
-    Stage(Internal::Definition d, const std::string &n) : definition(d), stage_name(n) {
+    Stage(Internal::Definition d, const std::string &n, const std::vector<Var> &args)
+            : definition(d), stage_name(n), pure_args(args) {
         definition.schedule().touched() = true;
+    }
+
+    Stage(Internal::Definition d, const std::string &n, const std::vector<std::string> &args)
+            : definition(d), stage_name(n) {
+        definition.schedule().touched() = true;
+
+        std::vector<Var> pure_args(args.size());
+        for (size_t i = 0; i < args.size(); i++) {
+            pure_args[i] = Var(args[i]);
+        }
     }
 
     /** Return the current Schedule associated with this Stage.  For
@@ -65,6 +78,10 @@ public:
 
     /** Return the name of this stage, e.g. "f.update(2)" */
     EXPORT const std::string &name() const;
+
+    /* Lift vars not in 'old_vars' */
+    EXPORT Func lift(const std::vector<RVar> &old_vars,
+                     const std::vector<Var> &new_vars);
 
     /** Scheduling calls that control how the domain of this stage is
      * traversed. See the documentation for Func for the meanings. */
