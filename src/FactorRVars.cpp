@@ -1,4 +1,4 @@
-#include "LiftCalls.h"
+#include "FactorRVars.h"
 
 #include <set>
 
@@ -13,7 +13,7 @@ using std::vector;
 
 typedef map<Function, Function, Function::Compare> SubstitutionMap;
 
-map<string, Function> lift_func_calls(const map<string, Function> &env) {
+map<string, Function> factor_rvars(const map<string, Function> &env) {
     map<string, Function> wrapped_env(env);
 
     //TODO(psuriana): implement this

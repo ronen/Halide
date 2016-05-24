@@ -374,179 +374,261 @@ Expr substitute_self_reference(Expr val, const string &func, const Function &sub
 
 } // anonymous namespace
 
-Func Stage::lift(const vector<RVar> &old_vars, const vector<Var> &new_vars) {
-    user_assert(!definition.is_init()) << "Cannot call lift() on pure definition\n";
-    user_assert(old_vars.size() == new_vars.size());
+Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
+    user_assert(!definition.is_init()) << "rfactor() must be called on an update definition\n";
 
-    const auto &lifted = definition.schedule().lifted_funcs();
-
-    const ReductionDomain &rdom = lifted.empty() ? definition.domain() : Definition(lifted.back()).domain();
-
-    // Check that the RVars are all in the reduction domain of the corresponding
-    // update definition
+    const vector<Definition> &rfactors = definition.rfactors();
+    // This Func might already have some 'rfactor' definitions from the previous calls.
+    // If so, we need to use the args/values/rdom from the last 'rfactor' definition instead.
+    const vector<Expr> &args = rfactors.empty() ? definition.args() : rfactors.back().args();
+    const vector<Expr> &values = rfactors.empty() ? definition.values() : rfactors.back().values();
+    const ReductionDomain &rdom = rfactors.empty() ? definition.domain() : rfactors.back().domain();
     const vector<ReductionVariable> &rvars = rdom.domain();
-    for (const RVar &v : old_vars) {
-        const auto &iter = std::find_if(
-            rvars.begin(), rvars.end(), [&v](const ReductionVariable& rvar) { return rvar.var == v.name(); });
-        user_assert(iter != rvars.end()) << "In schedule for " << stage_name
-                                         << ", Can't lift " << v.name()
-                                         << " since it's not in the reduction domain\n";
-    }
-    // Check that the new pure vars aren't already in the dims list
     vector<Dim> &dims = definition.schedule().dims();
-    for (size_t i = 0; i < new_vars.size(); ++i) {
-        const Var &v = new_vars[i];
+
+    string func_name;
+    {
+        vector<std::string> tmp = split_string(stage_name, ".update(");
+        internal_assert(!tmp.empty() && !tmp[0].empty());
+        func_name = tmp[0];
+    }
+
+    {
+        for (const auto &dim : dims) {
+            debug(0) << "DIM: " << dim.var << "\n";
+        }
+        for (const auto &arg : args) {
+            debug(0) << "ARGS: " << arg << "\n";
+        }
+    }
+
+    // Sort the rvars kept and its rename based on the dims list order to avoid
+    // changing the loop order
+    std::sort(preserved.begin(), preserved.end(),
+        [&](const pair<RVar, Var> &lhs, const pair<RVar, Var> &rhs){
+            const auto iter_lhs = std::find_if(
+                dims.begin(), dims.end(), [&lhs](const Dim& dim) { return dim.var == lhs.first.name(); });
+            const auto iter_rhs = std::find_if(
+                dims.begin(), dims.end(), [&rhs](const Dim& dim) { return dim.var == rhs.first.name(); });
+
+            // Check that the RVars are in the reduction domain
+            user_assert((iter_lhs != dims.end()) && (*iter_lhs).is_rvar)
+                << "In schedule for " << stage_name
+                << ", can't rfactor() on " << lhs.first.name()
+                << " since it's not in the reduction domain\n";
+            user_assert((iter_rhs != dims.end()) && (*iter_rhs).is_rvar)
+                << "In schedule for " << stage_name
+                << ", can't rfactor() on " << rhs.first.name()
+                << " since it's not in the reduction domain\n";
+            return iter_lhs < iter_rhs;
+        }
+    );
+
+    vector<RVar> rvars_kept(preserved.size()); // The list of RVars to keep in the final Func
+    vector<Var> vars_rename(preserved.size()); // List of pure Vars to replace the RVars in the intermediate Func
+    for (size_t i = 0; i < preserved.size(); ++i) {
+        const auto &val = preserved[i];
+        rvars_kept[i] = val.first;
+        vars_rename[i] = val.second;
+    }
+
+    // Check that the new pure Vars we used to rename the RVars in 'rvars_kept'
+    // aren't already in the dims list
+    for (size_t i = 0; i < vars_rename.size(); ++i) {
+        const Var &v = vars_rename[i];
         const auto &iter = std::find_if(
             dims.begin(), dims.end(), [&v](const Dim& dim) { return dim.var == v.name(); });
         user_assert(iter == dims.end())
             << "In schedule for " << stage_name
-            << ", Can't rename the lifted vars " << old_vars[i] << " into " << v.name()
-            << ", since it is already used in this Func's schedule elsewhere.\n" << dump_argument_list();
+            << ", can't rename the rvars " << rvars_kept[i] << " into " << v.name()
+            << ", since it is already used in this Func's schedule elsewhere.\n"
+            << dump_argument_list();
     }
-    for (const auto &dim : dims) {
-        debug(0) << "DIM: " << dim.var << "\n";
-    }
-    for (const auto &arg : definition.args()) {
-        debug(0) << "ARGS: " << arg << "\n";
-    }
-    // Remove any non-pure dim (reduction dim) not in old_vars (the list of reduction dims to keep)
-    vector<Dim> temp;
-    for (const Dim &dim : dims) {
-        if (dim.pure) {
-            temp.push_back(dim);
-        } else {
-            const auto &iter = std::find_if(
-                old_vars.begin(), old_vars.end(), [&dim](const RVar& v) { return dim.var == v.name(); });
-            if (iter != old_vars.end()) {
-                temp.push_back(dim);
+
+    // Remove any rvars not in 'rvars_kept' from the dims list.
+    // Those removed reduction dims are to be lifted to the intermediate Func.
+    {
+        //TODO(psuriana): need to update the rvar to the new one
+        vector<Dim> tmp;
+        for (const Dim &dim : dims) {
+            if (!dim.is_rvar) {
+                tmp.push_back(dim);
+            } else {
+                const auto &iter = std::find_if(
+                    rvars_kept.begin(), rvars_kept.end(), [&dim](const RVar& v) { return dim.var == v.name(); });
+                if (iter != rvars_kept.end()) {
+                    tmp.push_back(dim);
+                }
             }
         }
-    }
-    for (const auto &dim : temp) {
-        debug(0) << "TEMP DIM: " << dim.var << "\n";
-    }
-    dims.swap(temp); //TODO(psuriana): should uncomment this
-    debug(0) << "*********NEW DIM LIST: \n";
-    for (const auto &dim : dims) {
-        debug(0) << "DIM: " << dim.var << "\n";
+        //dims.swap(tmp); //TODO(psuriana): uncomment this
     }
 
-    debug(0) << "*********PURE ARGS: \n";
-    for (const auto &arg : pure_args) {
-        debug(0) << "PURE ARG: " << arg.name() << "\n";
-    }
-
-    // Create the init definition
+    // Init definition of the intermediate Func.
+    // We add new pure vars in the inner loop which replace the original
+    // rvars 'rvars_kept' in the Func's definition.
     vector<Var> init_args;
-    init_args.insert(init_args.end(), new_vars.begin(), new_vars.end());
+    init_args.insert(init_args.end(), vars_rename.begin(), vars_rename.end());
     init_args.insert(init_args.end(), pure_args.begin(), pure_args.end());
 
     // TODO(psuriana): should replace this with the identity
     vector<Expr> init_vals(definition.values().size(), 0);
 
-    Func lifted_func("lifted_func");
-    lifted_func(init_args) = Tuple(init_vals);
-    debug(0) << "*********INIT ARGS: \n";
-    for (const auto &arg : init_args) {
-        debug(0) << "ARGS: " << arg.name() << "\n";
-    }
-    debug(0) << "*********INIT VALS: \n";
-    for (const auto &val : init_vals) {
-        debug(0) << "VALS: " << val << "\n";
-    }
-    // Create a new RDom for the lifted funcs. We need to substitute 'old_vars'
-    // in the predicate with 'new_vars'
-    vector<string> lifted_rvars;
-    vector<string> new_def_rvars;
-    vector<pair<Expr, Expr>> lifted_ranges;
-    vector<pair<Expr, Expr>> new_def_ranges;
+    Func intm(func_name + "_intm");
+    intm(init_args) = Tuple(init_vals);
+
+    // Create new RDoms for the intermediate Func and the new Func update definition
+    // which refers to that intermediate Func.
+    vector<string> intm_rvars;
+    vector<pair<Expr, Expr>> intm_ranges;
+    vector<string> f_rvars;
+    vector<pair<Expr, Expr>> f_ranges;
     for (size_t i = 0; i < rvars.size(); ++i) {
         const ReductionVariable &v = rvars[i];
         const auto &iter = std::find_if(
-            old_vars.begin(), old_vars.end(), [&v](const RVar& rvar) { return rvar.name() == v.var; });
-        if (iter == old_vars.end()) {
-            lifted_ranges.push_back(make_pair(v.min, v.extent));
-            lifted_rvars.push_back(v.var);
+            rvars_kept.begin(), rvars_kept.end(), [&v](const RVar& rvar) { return rvar.name() == v.var; });
+        if (iter == rvars_kept.end()) {
+            intm_rvars.push_back(v.var);
+            intm_ranges.push_back(make_pair(v.min, v.extent));
         } else {
-            new_def_ranges.push_back(make_pair(v.min, v.extent));
-            new_def_rvars.push_back(v.var);
+            f_rvars.push_back(v.var);
+            f_ranges.push_back(make_pair(v.min, v.extent));
         }
     }
-    RDom lifted_rdom(lifted_ranges);
-    RDom new_def_rdom(new_def_ranges);
-    debug(0) << "LIFTED_RDOM:\n" << lifted_rdom << "\n\n";
-    debug(0) << "NEW DEF RDOM:\n" << new_def_rdom << "\n\n";
-    // Add the update definition
-    vector<Expr> update_args(definition.args().size() + new_vars.size());
-    internal_assert(init_args.size() == update_args.size()) << "\ninit_args: " << init_args.size() << "; update_args.size(): " << update_args.size() << "\n";
+    RDom intm_rdom(intm_ranges);
+    RDom f_rdom(f_ranges);
+
+    // Update definition args of the intermediate Func
+    vector<Expr> update_args(args.size() + vars_rename.size());
+    // We need to substitute the old reference to the RVars with the new RVars/Vars
     map<string, Expr> substitution_map;
-    for (int i = 0; i < lifted_rdom.dimensions(); ++i) {
-        const RVar &v = lifted_rdom[i];
-        substitution_map[lifted_rvars[i]] = v;
+    for (int i = 0; i < intm_rdom.dimensions(); ++i) {
+        substitution_map[intm_rvars[i]] = intm_rdom[i];
     }
-    for (size_t i = 0; i < new_vars.size(); i++) {
-        update_args[i] = new_vars[i];
-        substitution_map[old_vars[i].name()] = update_args[i];
+    for (size_t i = 0; i < vars_rename.size(); i++) {
+        update_args[i] = vars_rename[i];
+        substitution_map[rvars_kept[i].name()] = update_args[i];
     }
-    for (size_t i = 0; i < definition.args().size(); i++) {
-        // Substitute all old_vars with new_vars
-        Expr arg = substitute(substitution_map, definition.args()[i]);
-        update_args[i + new_vars.size()] = arg;
+    for (size_t i = 0; i < args.size(); i++) {
+        // Substitute old RVars with the new RVars/Vars
+        Expr arg = substitute(substitution_map, args[i]);
+        update_args[i + vars_rename.size()] = arg;
     }
-    debug(0) << "*********UPDATE ARGS: \n";
-    for (const auto &arg : update_args) {
-        debug(0) << "ARGS: " << arg << "\n";
+
+
+    {
+        debug(0) << "\n*********NEW DIM LIST: \n";
+        for (const auto &dim : dims) {
+            debug(0) << "DIM: " << dim.var << "\n";
+        }
+
+        debug(0) << "\n*********PURE ARGS: \n";
+        for (const auto &arg : pure_args) {
+            debug(0) << "PURE ARG: " << arg.name() << "\n";
+        }
+
+        debug(0) << "\n*********INIT ARGS: \n";
+        for (const auto &arg : init_args) {
+            debug(0) << "ARGS: " << arg.name() << "\n";
+        }
+        debug(0) << "\n*********INIT VALS: \n";
+        for (const auto &val : init_vals) {
+            debug(0) << "VALS: " << val << "\n";
+        }
+        debug(0) << "\n*********UPDATE ARGS: \n";
+        for (const auto &arg : update_args) {
+            debug(0) << "ARGS: " << arg << "\n";
+        }
     }
+
     // Add the RDom predicates (with the substitutions)
     for (const Expr &pred : rdom.split_predicate()) {
-        // Substitute all old_vars with new_vars
+        // Substitute all rvars_kept with vars_rename
         Expr subs_pred = substitute(substitution_map, pred);
-        lifted_rdom.where(subs_pred);
+        intm_rdom.where(subs_pred);
     }
-    debug(0) << "LIFTED_RDOM:\n" << lifted_rdom << "\n\n";
 
-    //TODO: Add the projected RDom predicates (with the substitutions)
+    //TODO(psuriana): Add the projected RDom predicates (with the substitutions)
     /*for (const Expr &pred : rdom.split_predicate()) {
-        // Substitute all old_vars with new_vars
+        // Substitute all rvars_kept with vars_rename
         Expr subs_pred = substitute(substitution_map, pred);
-        new_def_rdom.where(subs_pred);
+        f_rdom.where(subs_pred);
     }*/
 
-    // The update values the lifted_func should refer to
-    const vector<Expr> &values = lifted.empty() ? definition.values() : Definition(lifted.back()).values();
+    {
+        debug(0) << "LIFTED_RDOM:\n" << intm_rdom << "\n\n";
+        debug(0) << "NEW DEF RDOM:\n" << f_rdom << "\n\n";
+    }
+
+    // The update values the intermediate Func should compute
     vector<Expr> update_vals(values.size());
-    vector<std::string> func_names = split_string(stage_name, ".update(");
-    internal_assert(!func_names.empty());
     for (size_t i = 0; i < update_vals.size(); i++) {
-        // Substitute all old_vars with new_vars
+        // Substitute old RVars with the new RVars/Vars
         Expr val = substitute(substitution_map, values[i]);
-        //debug(0) << "original value: " << val << "\n";
-        val = substitute_self_reference(val, func_names[0], lifted_func.function(), new_vars);
+        // Need to update the self-reference to the new Func
+        val = substitute_self_reference(val, func_name, intm.function(), vars_rename);
         update_vals[i] = val;
     }
-    lifted_func(update_args) = Tuple(update_vals);
-    debug(0) << "*********UPDATE VALS: \n";
-    for (const auto &val : lifted_func.function().update(0).values()) {
-        debug(0) << "VALS: " << val << "\n";
-    }
-    debug(0) << "*********\n\n";
+    intm(update_args) = Tuple(update_vals);
 
-    vector<Expr> new_def_load_args; //TODO
-
-    new_def_load_args.insert(new_def_load_args.end(), definition.args().begin(), definition.args().end());
-    for (int i = 0; i < new_def_rdom.dimensions(); ++i) {
-        const RVar &v = new_def_rdom[i];
-        new_def_load_args.push_back(v);
+    // Define the new update definition which refers to the intermediate Func instead
+    vector<Expr> f_store_args(pure_args.size());
+    for (size_t i = 0; i < f_store_args.size(); ++i) {
+        f_store_args[i] = pure_args[i];
     }
 
-    vector<Expr> new_def_values(values.size());
-    for (size_t i = 0; i < new_def_values.size(); ++i) {
-        new_def_values[i] = lifted_func(new_def_load_args)[i];
+    vector<Expr> f_load_args;
+    for (int i = 0; i < f_rdom.dimensions(); ++i) {
+        f_load_args.push_back(f_rdom[i]);
     }
-    Definition new_def(definition.args(), new_def_values, new_def_rdom.domain(), definition.is_init());
+    f_load_args.insert(f_load_args.end(), pure_args.begin(), pure_args.end());
 
-    definition.schedule().add_lifted_func(new_def.get_contents());
-    return lifted_func;
+    {
+        debug(0) << "\n*********UPDATE VALS: \n";
+        for (const auto &val : intm.function().update(0).values()) {
+            debug(0) << "VALS: " << val << "\n";
+        }
+        debug(0) << "*********\n\n";
+
+        debug(0) << "\n*********STORE ARGS: \n";
+        for (const auto &arg : f_store_args) {
+            debug(0) << "ARGS: " << arg << "\n";
+        }
+        debug(0) << "\n*********LOAD ARGS: \n";
+        for (const auto &arg : f_load_args) {
+            debug(0) << "ARGS: " << arg << "\n";
+        }
+    }
+
+    vector<Expr> f_values(values.size());
+    if (values.size() > 1) {
+        for (size_t i = 0; i < f_values.size(); ++i) {
+            f_values[i] = intm(f_load_args)[i];
+        }
+    } else {
+        f_values[0] = intm(f_load_args);
+    }
+
+    Definition new_def(f_store_args, f_values, f_rdom.domain(), definition.is_init());
+    definition.add_rfactor(new_def);
+
+    //TODO(psuriana): Rename all the RVars to be the same as the old ones, so that
+    //user can still schedule using the old RVars
+    for (size_t i = 0; i < intm_rvars.size(); ++i) {
+        intm.update(0).rename(intm_rdom[i], VarOrRVar(intm_rvars[i], true));
+    }
+
+    {
+        debug(0) << "\n*********intermediate INIT DIM: \n";
+        for (const auto &dim : intm.function().schedule().dims()) {
+            debug(0) << "DIM: " << dim.var << "\n";
+        }
+        debug(0) << "\n*********intermediate UPDATE DIM: \n";
+        for (const auto &dim : intm.function().update_schedule(0).dims()) {
+            debug(0) << "DIM: " << dim.var << "\n";
+        }
+    }
+    return intm;
 }
 
 void Stage::split(const string &old, const string &outer, const string &inner, Expr factor, bool exact, TailStrategy tail) {

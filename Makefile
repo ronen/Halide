@@ -286,6 +286,7 @@ SOURCE_FILES = \
   EarlyFree.cpp \
   EliminateBoolVectors.cpp \
   Error.cpp \
+  FactorRVars.cpp \
   FastIntegerDivide.cpp \
   FindCalls.cpp \
   Float16.cpp \
@@ -311,7 +312,6 @@ SOURCE_FILES = \
   IRVisitor.cpp \
   JITModule.cpp \
   Lerp.cpp \
-  LiftCalls.cpp \
   LLVM_Output.cpp \
   LLVM_Runtime_Linker.cpp \
   Lower.cpp \
@@ -415,6 +415,7 @@ HEADER_FILES = \
   Expr.h \
   ExprUsesVar.h \
   Extern.h \
+  FactorRVars.h \
   FastIntegerDivide.h \
   FindCalls.h \
   Float16.h \
@@ -443,7 +444,6 @@ HEADER_FILES = \
   JITModule.h \
   Lambda.h \
   Lerp.h \
-  LiftCalls.h \
   LLVM_Output.h \
   LLVM_Runtime_Linker.h \
   Lower.h \

@@ -26,7 +26,7 @@
 #include "IRMutator.h"
 #include "IROperator.h"
 #include "IRPrinter.h"
-#include "LiftCalls.h"
+#include "FactorRVars.h"
 #include "Memoization.h"
 #include "PartitionLoops.h"
 #include "Profiling.h"
@@ -78,8 +78,8 @@ Stmt lower(vector<Function> outputs, const string &pipeline_name, const Target &
     // specializations' conditions
     simplify_specializations(env);
 
-    // Apply the 'lift' directives
-    env = lift_func_calls(env);
+    // Apply the 'rfactor' directives
+    env = factor_rvars(env);
 
     // Substitute in wrapper Funcs
     env = wrap_func_calls(env);

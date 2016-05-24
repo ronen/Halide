@@ -140,6 +140,7 @@ struct Dim {
     ForType for_type;
     DeviceAPI device_api;
     bool pure;
+    bool is_rvar;
 };
 
 struct Bound {
@@ -158,7 +159,6 @@ struct StorageDim {
 
 class ReductionDomain;
 
-struct DefinitionContents;
 struct FunctionContents;
 
 /** A schedule for a single stage of a Halide pipeline. Right now this
@@ -248,12 +248,6 @@ public:
     const std::map<std::string, IntrusivePtr<Internal::FunctionContents>> &wrappers() const;
     EXPORT void add_wrapper(const std::string &f,
                             const IntrusivePtr<Internal::FunctionContents> &wrapper);
-    // @}
-
-    /** Added lifted funcs. */
-    // @{
-    const std::vector<IntrusivePtr<Internal::DefinitionContents>> &lifted_funcs() const;
-    void add_lifted_func(const IntrusivePtr<Internal::DefinitionContents> &def);
     // @}
 
     /** At what sites should we inject the allocation and the

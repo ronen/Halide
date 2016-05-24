@@ -54,6 +54,7 @@ class Stage {
 public:
     Stage(Internal::Definition d, const std::string &n, const std::vector<Var> &args)
             : definition(d), stage_name(n), pure_args(args) {
+        internal_assert(definition.args().size() == pure_args.size());
         definition.schedule().touched() = true;
     }
 
@@ -65,6 +66,7 @@ public:
         for (size_t i = 0; i < args.size(); i++) {
             pure_args[i] = Var(args[i]);
         }
+        internal_assert(definition.args().size() == pure_args.size());
     }
 
     /** Return the current Schedule associated with this Stage.  For
@@ -79,9 +81,12 @@ public:
     /** Return the name of this stage, e.g. "f.update(2)" */
     EXPORT const std::string &name() const;
 
-    /* Lift vars not in 'old_vars' */
-    EXPORT Func lift(const std::vector<RVar> &old_vars,
-                     const std::vector<Var> &new_vars);
+    /** Given a function's update definition with dimensions {rvars, vars},
+     * split the update into an itermediate Func with dimensions
+     * {rvars - rvars_kept.first, vars_rename, vars} and a new update definition with
+     * dimensions {rvars_kept.second, vars}.
+     * If called on a init/pure definition, this will throw an error. */
+    EXPORT Func rfactor(std::vector<std::pair<RVar, Var>> preserved);
 
     /** Scheduling calls that control how the domain of this stage is
      * traversed. See the documentation for Func for the meanings. */

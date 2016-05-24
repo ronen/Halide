@@ -18,6 +18,7 @@ struct DefinitionContents {
     std::vector<Expr> values, args;
     Schedule schedule;
     ReductionDomain domain;
+    std::vector<Definition> rfactors;
     std::vector<Specialization> specializations;
 
     DefinitionContents() : is_init(true) {}
@@ -34,6 +35,10 @@ struct DefinitionContents {
 
         if (domain.defined()) {
             domain.accept(visitor);
+        }
+
+        for (const Definition &def : rfactors) {
+            def.accept(visitor);
         }
 
         for (const Specialization &s : specializations) {
@@ -56,6 +61,10 @@ struct DefinitionContents {
 
         if (domain.defined()) {
             domain.mutate(mutator);
+        }
+
+        for (Definition &def : rfactors) {
+            def.mutate(mutator);
         }
 
         for (Specialization &s : specializations) {
@@ -130,6 +139,12 @@ Definition Definition::deep_copy(
         s_copy.condition = s.condition;
         s_copy.definition = s.definition.deep_copy(copied_map);
         copy.contents->specializations.push_back(std::move(s_copy));
+    }
+
+    // Deep-copy rfactors
+    for (const Definition &def : contents->rfactors) {
+        Definition def_copy = def.deep_copy(copied_map);
+        copy.contents->rfactors.push_back(std::move(def_copy));
     }
     return copy;
 }
@@ -210,6 +225,15 @@ const Specialization &Definition::add_specialization(Expr condition) {
 
     contents->specializations.push_back(s);
     return contents->specializations.back();
+}
+
+const std::vector<Definition> &Definition::rfactors() const {
+    return contents->rfactors;
+}
+
+void Definition::add_rfactor(const Definition &def) {
+    internal_assert(def.contents.defined());
+    contents->rfactors.push_back(def);
 }
 
 }

@@ -1,5 +1,5 @@
-#ifndef LIFT_CALLS_H
-#define LIFT_CALLS_H
+#ifndef HALIDE_FACTOR_RVARS_H
+#define HALIDE_FACTOR_RVARS_H
 
 /** \file
  *
@@ -15,7 +15,7 @@ namespace Internal {
 
 /** Replace every call to wrapped Functions in the Functions' definitions with
   * call to their wrapper functions. */
-std::map<std::string, Function> lift_func_calls(const std::map<std::string, Function> &env);
+std::map<std::string, Function> factor_rvars(const std::map<std::string, Function> &env);
 
 }
 }

@@ -116,6 +116,15 @@ public:
     const Specialization &add_specialization(Expr condition);
     // @}
 
+    /** You may split the computation of an update definition into two Funcs:
+     * an intermediate Func which reduces the original update values definition
+     * on a subset of iteration dims and a final Func which consumes the
+     * intermediate Func and reduces it on the remaining iteration dims.
+     * See \ref Stage::rfactor */
+    // @{
+    const std::vector<Definition> &rfactors() const;
+    void add_rfactor(const Definition &def);
+    // @}
 };
 
 struct Specialization {
