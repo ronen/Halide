@@ -74,12 +74,8 @@ Stmt lower(vector<Function> outputs, const string &pipeline_name, const Target &
     // Create a deep-copy of the entire graph of Funcs.
     std::tie(outputs, env) = deep_copy(outputs, env);
 
-    // Try to simplify the RHS/LHS of a function definition by propagating its
-    // specializations' conditions
-    simplify_specializations(env);
-
     // Apply the 'rfactor' directives
-    env = factor_rvars(env);
+    factor_rvars(env);
 
     // Substitute in wrapper Funcs
     env = wrap_func_calls(env);
@@ -89,9 +85,13 @@ Stmt lower(vector<Function> outputs, const string &pipeline_name, const Target &
 
     bool any_memoized = false;
 
+    // Try to simplify the RHS/LHS of a function definition by propagating its
+    // specializations' conditions
+    simplify_specializations(env);
+
     debug(1) << "Creating initial loop nests...\n";
     Stmt s = schedule_functions(outputs, order, env, t, any_memoized);
-    debug(2) << "Lowering after creating initial loop nests:\n" << s << '\n';
+    debug(0) << "Lowering after creating initial loop nests:\n" << s << '\n';
 
     if (any_memoized) {
         debug(1) << "Injecting memoization...\n";
@@ -263,7 +263,7 @@ Stmt lower(vector<Function> outputs, const string &pipeline_name, const Target &
     s = remove_dead_allocations(s);
     s = remove_trivial_for_loops(s);
     s = simplify(s);
-    debug(1) << "Lowering after final simplification:\n" << s << "\n\n";
+    debug(0) << "Lowering after final simplification:\n" << s << "\n\n";
 
     if (!custom_passes.empty()) {
         for (size_t i = 0; i < custom_passes.size(); i++) {

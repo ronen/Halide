@@ -779,6 +779,10 @@ const Definition &Function::update(int idx) const {
     return contents->updates[idx];
 }
 
+std::vector<Definition> &Function::updates() {
+    return contents->updates;
+}
+
 const std::vector<Definition> &Function::updates() const {
     return contents->updates;
 }

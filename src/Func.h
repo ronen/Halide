@@ -46,15 +46,15 @@ struct VarOrRVar {
 class Stage {
     Internal::Definition definition;
     std::string stage_name;
-    std::vector<Var> pure_args; // Pure args of the Function
+    std::vector<Var> pure_vars; // Pure vars of the Function
 
     void set_dim_type(VarOrRVar var, Internal::ForType t);
     void set_dim_device_api(VarOrRVar var, DeviceAPI device_api);
     void split(const std::string &old, const std::string &outer, const std::string &inner, Expr factor, bool exact, TailStrategy tail);
 public:
     Stage(Internal::Definition d, const std::string &n, const std::vector<Var> &args)
-            : definition(d), stage_name(n), pure_args(args) {
-        internal_assert(definition.args().size() == pure_args.size());
+            : definition(d), stage_name(n), pure_vars(args) {
+        internal_assert(definition.args().size() == pure_vars.size());
         definition.schedule().touched() = true;
     }
 
@@ -62,11 +62,11 @@ public:
             : definition(d), stage_name(n) {
         definition.schedule().touched() = true;
 
-        std::vector<Var> pure_args(args.size());
+        std::vector<Var> pure_vars(args.size());
         for (size_t i = 0; i < args.size(); i++) {
-            pure_args[i] = Var(args[i]);
+            pure_vars[i] = Var(args[i]);
         }
-        internal_assert(definition.args().size() == pure_args.size());
+        internal_assert(definition.args().size() == pure_vars.size());
     }
 
     /** Return the current Schedule associated with this Stage.  For

@@ -180,6 +180,9 @@ public:
      * index 'idx'. */
     EXPORT const Definition &update(int idx = 0) const;
 
+    /** Get a mutable handle to this function's update definitions. */
+    EXPORT std::vector<Definition> &updates();
+
     /** Get a const reference to this function's update definitions. */
     EXPORT const std::vector<Definition> &updates() const;
 

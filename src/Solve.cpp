@@ -330,6 +330,7 @@ private:
         }
     }
 
+    // This actually commutative and associative op
     template<typename T>
     void visit_commutative_op(const T *op) {
         bool old_uses_var = uses_var;

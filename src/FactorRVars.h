@@ -3,7 +3,7 @@
 
 /** \file
  *
- * Defines pass to replace calls to wrapped Functions with their wrappers.
+ * Defines pass to replace args/values/rdoms in the Functions' definitions with their rfactor.
  */
 
 #include <map>
@@ -13,9 +13,8 @@
 namespace Halide {
 namespace Internal {
 
-/** Replace every call to wrapped Functions in the Functions' definitions with
-  * call to their wrapper functions. */
-std::map<std::string, Function> factor_rvars(const std::map<std::string, Function> &env);
+/** Replace args/values/rdoms in the Functions' definitions with their rfactor. */
+void factor_rvars(std::map<std::string, Function> &env);
 
 }
 }

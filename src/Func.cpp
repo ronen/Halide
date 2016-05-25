@@ -235,6 +235,9 @@ int Func::add_implicit_vars(vector<Expr> &args) const {
     }
 
     if (func.has_pure_definition() && args.size() != (size_t)dimensions()) {
+        for (const auto& i : args) {
+            debug(0) << "-----args: " << i << "\n";
+        }
         user_error << "Func \"" << name() << "\" was called with "
                    << args.size() << " arguments, but was defined with " << dimensions() << "\n";
     }
@@ -393,13 +396,17 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
         func_name = tmp[0];
     }
 
-    {
-        for (const auto &dim : dims) {
-            debug(0) << "DIM: " << dim.var << "\n";
-        }
-        for (const auto &arg : args) {
-            debug(0) << "ARGS: " << arg << "\n";
-        }
+    // Check that the RVars are in the reduction domain
+    for (const auto &i : preserved) {
+        const RVar &rv = i.first;
+        const auto iter = std::find_if(
+            dims.begin(), dims.end(), [&rv](const Dim& dim) { return var_name_match(dim.var, rv.name()); });
+
+        // Check that the RVars are in the reduction domain
+        user_assert((iter != dims.end()) && (*iter).is_rvar)
+            << "In schedule for " << stage_name
+            << ", can't rfactor() on " << rv.name()
+            << " since it is not in the reduction domain\n";
     }
 
     // Sort the rvars kept and its rename based on the dims list order to avoid
@@ -407,19 +414,9 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
     std::sort(preserved.begin(), preserved.end(),
         [&](const pair<RVar, Var> &lhs, const pair<RVar, Var> &rhs){
             const auto iter_lhs = std::find_if(
-                dims.begin(), dims.end(), [&lhs](const Dim& dim) { return dim.var == lhs.first.name(); });
+                dims.begin(), dims.end(), [&lhs](const Dim& dim) { return var_name_match(dim.var, lhs.first.name()); });
             const auto iter_rhs = std::find_if(
-                dims.begin(), dims.end(), [&rhs](const Dim& dim) { return dim.var == rhs.first.name(); });
-
-            // Check that the RVars are in the reduction domain
-            user_assert((iter_lhs != dims.end()) && (*iter_lhs).is_rvar)
-                << "In schedule for " << stage_name
-                << ", can't rfactor() on " << lhs.first.name()
-                << " since it's not in the reduction domain\n";
-            user_assert((iter_rhs != dims.end()) && (*iter_rhs).is_rvar)
-                << "In schedule for " << stage_name
-                << ", can't rfactor() on " << rhs.first.name()
-                << " since it's not in the reduction domain\n";
+                dims.begin(), dims.end(), [&rhs](const Dim& dim) { return var_name_match(dim.var, rhs.first.name()); });
             return iter_lhs < iter_rhs;
         }
     );
@@ -437,7 +434,7 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
     for (size_t i = 0; i < vars_rename.size(); ++i) {
         const Var &v = vars_rename[i];
         const auto &iter = std::find_if(
-            dims.begin(), dims.end(), [&v](const Dim& dim) { return dim.var == v.name(); });
+            dims.begin(), dims.end(), [&v](const Dim& dim) { return var_name_match(dim.var, v.name()); });
         user_assert(iter == dims.end())
             << "In schedule for " << stage_name
             << ", can't rename the rvars " << rvars_kept[i] << " into " << v.name()
@@ -445,37 +442,22 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
             << dump_argument_list();
     }
 
-    // Remove any rvars not in 'rvars_kept' from the dims list.
-    // Those removed reduction dims are to be lifted to the intermediate Func.
-    {
-        //TODO(psuriana): need to update the rvar to the new one
-        vector<Dim> tmp;
-        for (const Dim &dim : dims) {
-            if (!dim.is_rvar) {
-                tmp.push_back(dim);
-            } else {
-                const auto &iter = std::find_if(
-                    rvars_kept.begin(), rvars_kept.end(), [&dim](const RVar& v) { return dim.var == v.name(); });
-                if (iter != rvars_kept.end()) {
-                    tmp.push_back(dim);
-                }
-            }
-        }
-        //dims.swap(tmp); //TODO(psuriana): uncomment this
-    }
-
     // Init definition of the intermediate Func.
     // We add new pure vars in the inner loop which replace the original
     // rvars 'rvars_kept' in the Func's definition.
     vector<Var> init_args;
     init_args.insert(init_args.end(), vars_rename.begin(), vars_rename.end());
-    init_args.insert(init_args.end(), pure_args.begin(), pure_args.end());
+    init_args.insert(init_args.end(), pure_vars.begin(), pure_vars.end());
 
     // TODO(psuriana): should replace this with the identity
     vector<Expr> init_vals(definition.values().size(), 0);
 
     Func intm(func_name + "_intm");
     intm(init_args) = Tuple(init_vals);
+
+    for (const auto &v : rvars_kept) {
+        debug(0) << "rvars_kept: " << v.name() << "\n";
+    }
 
     // Create new RDoms for the intermediate Func and the new Func update definition
     // which refers to that intermediate Func.
@@ -485,8 +467,9 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
     vector<pair<Expr, Expr>> f_ranges;
     for (size_t i = 0; i < rvars.size(); ++i) {
         const ReductionVariable &v = rvars[i];
+        debug(0) << "ReductionVariable v: " << v.var << "\n";
         const auto &iter = std::find_if(
-            rvars_kept.begin(), rvars_kept.end(), [&v](const RVar& rvar) { return rvar.name() == v.var; });
+            rvars_kept.begin(), rvars_kept.end(), [&v](const RVar& rvar) { return var_name_match(v.var, rvar.name()); });
         if (iter == rvars_kept.end()) {
             intm_rvars.push_back(v.var);
             intm_ranges.push_back(make_pair(v.min, v.extent));
@@ -509,6 +492,11 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
         update_args[i] = vars_rename[i];
         substitution_map[rvars_kept[i].name()] = update_args[i];
     }
+
+    for (const auto &iter : substitution_map) {
+        debug(0) << "...Substitute " << iter.first << " with " << iter.second << "\n";
+    }
+
     for (size_t i = 0; i < args.size(); i++) {
         // Substitute old RVars with the new RVars/Vars
         Expr arg = substitute(substitution_map, args[i]);
@@ -517,14 +505,24 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
 
 
     {
-        debug(0) << "\n*********NEW DIM LIST: \n";
+        debug(0) << "\n*********ORIGINAL DIMS: \n";
         for (const auto &dim : dims) {
             debug(0) << "DIM: " << dim.var << "\n";
         }
 
         debug(0) << "\n*********PURE ARGS: \n";
-        for (const auto &arg : pure_args) {
+        for (const auto &arg : pure_vars) {
             debug(0) << "PURE ARG: " << arg.name() << "\n";
+        }
+
+        debug(0) << "\n*********ORIGINAL ARGS: \n";
+        for (const auto &arg : args) {
+            debug(0) << "ARGS: " << arg << "\n";
+        }
+
+        debug(0) << "\n*********ORIGINAL VALS: \n";
+        for (const auto &val : values) {
+            debug(0) << "VALS: " << val << "\n";
         }
 
         debug(0) << "\n*********INIT ARGS: \n";
@@ -556,7 +554,7 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
     }*/
 
     {
-        debug(0) << "LIFTED_RDOM:\n" << intm_rdom << "\n\n";
+        debug(0) << "\nLIFTED_RDOM:\n" << intm_rdom << "\n\n";
         debug(0) << "NEW DEF RDOM:\n" << f_rdom << "\n\n";
     }
 
@@ -572,16 +570,16 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
     intm(update_args) = Tuple(update_vals);
 
     // Define the new update definition which refers to the intermediate Func instead
-    vector<Expr> f_store_args(pure_args.size());
+    vector<Expr> f_store_args(pure_vars.size());
     for (size_t i = 0; i < f_store_args.size(); ++i) {
-        f_store_args[i] = pure_args[i];
+        f_store_args[i] = pure_vars[i];
     }
 
     vector<Expr> f_load_args;
     for (int i = 0; i < f_rdom.dimensions(); ++i) {
         f_load_args.push_back(f_rdom[i]);
     }
-    f_load_args.insert(f_load_args.end(), pure_args.begin(), pure_args.end());
+    f_load_args.insert(f_load_args.end(), pure_vars.begin(), pure_vars.end());
 
     {
         debug(0) << "\n*********UPDATE VALS: \n";
@@ -590,32 +588,80 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
         }
         debug(0) << "*********\n\n";
 
-        debug(0) << "\n*********STORE ARGS: \n";
+        debug(0) << "\n*********F_STORE ARGS: \n";
         for (const auto &arg : f_store_args) {
             debug(0) << "ARGS: " << arg << "\n";
         }
-        debug(0) << "\n*********LOAD ARGS: \n";
+        debug(0) << "\n*********F_LOAD ARGS: \n";
         for (const auto &arg : f_load_args) {
             debug(0) << "ARGS: " << arg << "\n";
         }
     }
 
+
+    // TODO(psuriana): need to retrieve value from the prev stage
     vector<Expr> f_values(values.size());
     if (values.size() > 1) {
         for (size_t i = 0; i < f_values.size(); ++i) {
-            f_values[i] = intm(f_load_args)[i];
+            Expr prev_val = Call::make(intm.output_types()[i], func_name, f_store_args, Call::CallType::Halide, nullptr, i);
+            f_values[i] = prev_val + intm(f_load_args)[i];
         }
     } else {
-        f_values[0] = intm(f_load_args);
+        Expr prev_val = Call::make(intm.output_types()[0], func_name, f_store_args, Call::CallType::Halide);
+        f_values[0] = prev_val + intm(f_load_args);
+    }
+
+    {
+        debug(0) << "\n*********F_VALS: \n";
+        for (const auto &val : f_values) {
+            debug(0) << "VALS: " << val << "\n";
+        }
     }
 
     Definition new_def(f_store_args, f_values, f_rdom.domain(), definition.is_init());
     definition.add_rfactor(new_def);
 
-    //TODO(psuriana): Rename all the RVars to be the same as the old ones, so that
-    //user can still schedule using the old RVars
+    // Rename all the RVars of the intermediate Func to the old ones, so that
+    // user can still schedule the intermediate Func using the old RVars
     for (size_t i = 0; i < intm_rvars.size(); ++i) {
         intm.update(0).rename(intm_rdom[i], VarOrRVar(intm_rvars[i], true));
+    }
+
+    //TODO(psuriana): need to add this to the split list
+    // Remove any rvars not in 'rvars_kept' from the dims list.
+    // Those removed reduction dims are to be lifted to the intermediate Func.
+    /*vector<Dim> tmp;
+    for (const Dim &dim : dims) {
+        debug(0) << "----Dimension " << dim.var << "; is rvar? " << dim.is_rvar << "\n";
+        if (dim.is_rvar) {
+            const auto &iter = std::find_if(
+                rvars_kept.begin(), rvars_kept.end(), [&dim](const RVar& v) { return dim.var == v.name(); });
+            if (iter != rvars_kept.end()) {
+                tmp.push_back(dim);
+            }
+        }
+    }
+    dims.swap(tmp);*/
+
+    dims.clear();
+    for (int i = 0; i < f_rdom.dimensions(); ++i) {
+        const string & v = f_rdom[i].name();
+        //TODO(psuriana): need to actually recompute this
+        //bool pure = can_parallelize_rvar(v, name(), r);
+        Dim d = {v, ForType::Serial, DeviceAPI::None, false, true};
+        dims.push_back(d);
+    }
+
+    // TODO(psuriana): Add the new pure dims we just added to the dim list
+    for (const Var &v : pure_vars) {
+        Dim d = {v.name(), ForType::Serial, DeviceAPI::None, true, false};
+        dims.push_back(d);
+    }
+
+    // Rename all the RVars in the new RDom, so that user can still schedule
+    // the Func using the old RVars
+    for (size_t i = 0; i < f_rvars.size(); ++i) {
+        rename(f_rdom[i], VarOrRVar(f_rvars[i], true));
     }
 
     {
@@ -625,6 +671,10 @@ Func Stage::rfactor(vector<pair<RVar, Var>> preserved) {
         }
         debug(0) << "\n*********intermediate UPDATE DIM: \n";
         for (const auto &dim : intm.function().update_schedule(0).dims()) {
+            debug(0) << "DIM: " << dim.var << "\n";
+        }
+        debug(0) << "\n*********NEW FINAL UPDATE DIM: \n";
+        for (const auto &dim : dims) {
             debug(0) << "DIM: " << dim.var << "\n";
         }
     }
@@ -779,12 +829,12 @@ Stage Stage::specialize(Expr condition) {
     const vector<Specialization> &specializations = definition.specializations();
     for (size_t i = 0; i < specializations.size(); i++) {
         if (equal(condition, specializations[i].condition)) {
-            return Stage(specializations[i].definition, stage_name, pure_args);
+            return Stage(specializations[i].definition, stage_name, pure_vars);
         }
     }
     const Specialization &s = definition.add_specialization(condition);
 
-    return Stage(s.definition, stage_name, pure_args);
+    return Stage(s.definition, stage_name, pure_vars);
 }
 
 Stage &Stage::rename(VarOrRVar old_var, VarOrRVar new_var) {
@@ -1923,20 +1973,20 @@ Stage FuncRefExpr::operator=(const FuncRefVar &e) {
 // definition. This is a helper for FuncRefExpr::operator+= and co.
 void define_base_case(Internal::Function func, const vector<Expr> &a, Expr e) {
     if (func.has_pure_definition()) return;
-    vector<Var> pure_args(a.size());
+    vector<Var> pure_vars(a.size());
 
     // Reuse names of existing pure args
     for (size_t i = 0; i < a.size(); i++) {
         if (const Variable *v = a[i].as<Variable>()) {
             if (!v->param.defined()) {
-                pure_args[i] = Var(v->name);
+                pure_vars[i] = Var(v->name);
             }
         } else {
-            pure_args[i] = Var();
+            pure_vars[i] = Var();
         }
     }
 
-    FuncRefVar(func, pure_args) = e;
+    FuncRefVar(func, pure_vars) = e;
 }
 
 Stage FuncRefExpr::operator+=(Expr e) {
