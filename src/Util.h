@@ -214,7 +214,7 @@ EXPORT FileStat file_stat(const std::string &name);
  */
 class TemporaryFile final {
 public:
-    TemporaryFile(const std::string &prefix, const std::string &suffix) 
+    TemporaryFile(const std::string &prefix, const std::string &suffix)
         : temp_path(file_make_temp(prefix, suffix)) {}
     const std::string &pathname() const { return temp_path; }
     ~TemporaryFile() { file_unlink(temp_path); }

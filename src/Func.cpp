@@ -258,7 +258,7 @@ void Stage::set_dim_type(VarOrRVar var, ForType t) {
     bool found = false;
     vector<Dim> &dims = definition.schedule().dims();
     for (size_t i = 0; i < dims.size(); i++) {
-        if (var_name_match(dims[i].var, var.name())) {
+        if (var_name_match(dims[i].var(), var.name())) {
             found = true;
             dims[i].for_type = t;
 
@@ -283,7 +283,7 @@ void Stage::set_dim_type(VarOrRVar var, ForType t) {
             user_assert(dims[i].for_type != ForType::Vectorized)
                 << "In schedule for " << stage_name
                 << ", can't vectorize across " << var.name()
-                << " because Func is already vectorized across " << dims[i].var << "\n";
+                << " because Func is already vectorized across " << dims[i].var() << "\n";
         }
     }
 
@@ -301,7 +301,7 @@ void Stage::set_dim_device_api(VarOrRVar var, DeviceAPI device_api) {
     bool found = false;
     vector<Dim> &dims = definition.schedule().dims();
     for (size_t i = 0; i < dims.size(); i++) {
-        if (var_name_match(dims[i].var, var.name())) {
+        if (var_name_match(dims[i].var(), var.name())) {
             found = true;
             dims[i].device_api = device_api;
         }
@@ -321,7 +321,7 @@ std::string Stage::dump_argument_list() const {
     std::ostringstream oss;
     oss << "Vars:";
     for (size_t i = 0; i < definition.schedule().dims().size(); i++) {
-        oss << " " << definition.schedule().dims()[i].var;
+        oss << " " << definition.schedule().dims()[i].var();
     }
     oss << "\n";
     return oss.str();
@@ -335,7 +335,7 @@ void Stage::split(const string &old, const string &outer, const string &inner, E
     for (size_t i = 0; i < dims.size(); i++) {
         string new_names[2] = {inner, outer};
         for (int j = 0; j < 2; j++) {
-            if (var_name_match(dims[i].var, new_names[j]) && new_names[j] != old) {
+            if (var_name_match(dims[i].var(), new_names[j]) && new_names[j] != old) {
                 user_error << "In schedule for " << stage_name
                            << ", can't create var " << new_names[j]
                            << " using a split or tile, because " << new_names[j]
@@ -349,14 +349,14 @@ void Stage::split(const string &old, const string &outer, const string &inner, E
     string inner_name, outer_name, old_name;
 
     for (size_t i = 0; (!found) && i < dims.size(); i++) {
-        if (var_name_match(dims[i].var, old)) {
+        if (var_name_match(dims[i].var(), old)) {
             found = true;
-            old_name = dims[i].var;
+            old_name = dims[i].var();
             inner_name = old_name + "." + inner;
             outer_name = old_name + "." + outer;
             dims.insert(dims.begin() + i, dims[i]);
-            dims[i].var = inner_name;
-            dims[i+1].var = outer_name;
+            dims[i].var() = inner_name;
+            dims[i+1].var() = outer_name;
             dims[i+1].pure = dims[i].pure;
         }
     }
@@ -406,9 +406,9 @@ Stage &Stage::fuse(VarOrRVar inner, VarOrRVar outer, VarOrRVar fused) {
 
     bool outer_pure = false;
     for (size_t i = 0; (!found_outer) && i < dims.size(); i++) {
-        if (var_name_match(dims[i].var, outer.name())) {
+        if (var_name_match(dims[i].var(), outer.name())) {
             found_outer = true;
-            outer_name = dims[i].var;
+            outer_name = dims[i].var();
             outer_pure = dims[i].pure;
             dims.erase(dims.begin() + i);
         }
@@ -422,11 +422,11 @@ Stage &Stage::fuse(VarOrRVar inner, VarOrRVar outer, VarOrRVar fused) {
     }
 
     for (size_t i = 0; (!found_inner) && i < dims.size(); i++) {
-        if (var_name_match(dims[i].var, inner.name())) {
+        if (var_name_match(dims[i].var(), inner.name())) {
             found_inner = true;
-            inner_name = dims[i].var;
+            inner_name = dims[i].var();
             fused_name = inner_name + "." + fused.name();
-            dims[i].var = fused_name;
+            dims[i].var() = fused_name;
             dims[i].pure &= outer_pure;
         }
     }
@@ -504,10 +504,10 @@ Stage &Stage::rename(VarOrRVar old_var, VarOrRVar new_var) {
     string old_name;
     vector<Dim> &dims = schedule.dims();
     for (size_t i = 0; (!found) && i < dims.size(); i++) {
-        if (var_name_match(dims[i].var, old_var.name())) {
+        if (var_name_match(dims[i].var(), old_var.name())) {
             found = true;
-            old_name = dims[i].var;
-            dims[i].var += "." + new_var.name();
+            old_name = dims[i].var();
+            dims[i].var() += "." + new_var.name();
         }
     }
 
@@ -667,7 +667,7 @@ void reorder_vars(vector<Dim> &dims_old, const VarOrRVar *vars, size_t size, con
     for (size_t i = 0; i < size; i++) {
         bool found = false;
         for (size_t j = 0; j < dims.size(); j++) {
-            if (var_name_match(dims[j].var, vars[i].name())) {
+            if (var_name_match(dims[j].var(), vars[i].name())) {
                 idx[i] = j;
                 found = true;
             }

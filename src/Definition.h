@@ -45,7 +45,7 @@ public:
 
     /** Construct a Definition with the supplied args, values, and reduction domain. */
     EXPORT Definition(const std::vector<Expr> &args, const std::vector<Expr> &values,
-                      const ReductionDomain &rdom, bool is_init);
+                      Expr cond, bool is_init);
 
     /** Construct an empty Definition. By default, it is a init definition. */
     EXPORT Definition();
@@ -88,17 +88,16 @@ public:
     std::vector<Expr> &values();
     // @}
 
+    /** Get the condition on the definition */
+    // @{
+    const Expr &condition() const;
+    Expr &condition();
+    // @}
+
     /** Get the default (no-specialization) schedule associated with this definition. */
     // @{
     const Schedule &schedule() const;
     Schedule &schedule();
-    // @}
-
-    /** Get the default (no-specialization) reduction domain associated with this
-     * function's definition. */
-    // @{
-    const ReductionDomain &domain() const;
-    void set_domain(const ReductionDomain &d);
     // @}
 
     /** You may create several specialized versions of a func with

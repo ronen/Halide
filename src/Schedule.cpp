@@ -1,7 +1,6 @@
 #include "IR.h"
 #include "IRMutator.h"
 #include "Schedule.h"
-#include "Reduction.h"
 
 namespace Halide {
 namespace Internal {
@@ -23,7 +22,6 @@ struct ScheduleContents {
     std::vector<StorageDim> storage_dims;
     std::vector<Bound> bounds;
     std::map<std::string, IntrusivePtr<Internal::FunctionContents>> wrappers;
-    ReductionDomain reduction_domain;
     bool memoized;
     bool touched;
     bool allow_race_conditions;
@@ -45,7 +43,6 @@ struct ScheduleContents {
                 b.extent = mutator->mutate(b.extent);
             }
         }
-        reduction_domain.mutate(mutator);
     }
 };
 
@@ -73,7 +70,6 @@ Schedule Schedule::deep_copy(
     copy.contents->dims = contents->dims;
     copy.contents->storage_dims = contents->storage_dims;
     copy.contents->bounds = contents->bounds;
-    copy.contents->reduction_domain = contents->reduction_domain.deep_copy();
     copy.contents->memoized = contents->memoized;
     copy.contents->touched = contents->touched;
     copy.contents->allow_race_conditions = contents->allow_race_conditions;
@@ -173,14 +169,6 @@ const LoopLevel &Schedule::store_level() const {
 
 const LoopLevel &Schedule::compute_level() const {
     return contents->compute_level;
-}
-
-const ReductionDomain &Schedule::reduction_domain() const {
-    return contents->reduction_domain;
-}
-
-void Schedule::set_reduction_domain(const ReductionDomain &d) {
-    contents->reduction_domain = d;
 }
 
 bool &Schedule::allow_race_conditions() {

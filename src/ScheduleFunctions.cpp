@@ -61,6 +61,7 @@ Stmt build_provide_loop_nest_helper(string func_name,
                                     const vector<string> &dims,
                                     const vector<Expr> &site,
                                     const vector<Expr> &values,
+                                    const Expr &condition,
                                     const Schedule &s,
                                     bool is_update) {
 
@@ -77,13 +78,12 @@ Stmt build_provide_loop_nest_helper(string func_name,
     for (const Bound &i : s.bounds()) {
         known_size_dims[i.var] = i.extent;
     }
-    // Then use any reduction domain.
-    const ReductionDomain &rdom = s.reduction_domain();
-    internal_assert(is_update || !rdom.defined())
-        << "Init definition shouldn't have a RDom\n";
-    if (rdom.defined()) {
-        for (const ReductionVariable &i : rdom.domain()) {
-            known_size_dims[i.var] = i.extent;
+    // Then use any reduction domain variables.
+    vector<string> rvars;
+    for (const Dim &d : s.dims()) {
+        if (d.is_rvar) {
+            rvars.push_back(d.var());
+            known_size_dims[d.var()] = d.extent();
         }
     }
 
@@ -181,7 +181,7 @@ Stmt build_provide_loop_nest_helper(string func_name,
                 // partition) if the outer var is the innermost
                 // non-trivial loop and it's a serial loop. This
                 // usually is due to an unroll or vectorize call.
-                if (split.outer == innermost_non_trivial_loop.var &&
+                if (split.outer == innermost_non_trivial_loop.var() &&
                     innermost_non_trivial_loop.for_type == ForType::Serial) {
                     base = likely(base);
                 }
@@ -239,7 +239,7 @@ Stmt build_provide_loop_nest_helper(string func_name,
     // Put the desired loop nest into the containers vector.
     for (int i = (int)s.dims().size() - 1; i >= 0; i--) {
         const Dim &dim = s.dims()[i];
-        Container c = {Container::For, i, prefix + dim.var, Expr()};
+        Container c = {Container::For, i, prefix + dim.var(), Expr()};
         nest.push_back(c);
     }
 
@@ -252,8 +252,9 @@ Stmt build_provide_loop_nest_helper(string func_name,
 
     // Put all the reduction domain predicate into the containers vector.
     int n_predicates = 0;
-    if (rdom.defined()) {
-        vector<Expr> predicates = rdom.split_predicate();
+    if (condition.defined()) {
+        vector<Expr> predicates;
+        split_into_ands(condition, predicates);
         n_predicates = predicates.size();
         for (Expr pred : predicates) {
             pred = qualify(prefix, pred);
@@ -373,15 +374,13 @@ Stmt build_provide_loop_nest_helper(string func_name,
 
     // Define the loop mins and extents for the reduction domain (if there is any)
     // in terms of the mins and maxs produced by bounds inference
-    if (rdom.defined()) {
-        for (const ReductionVariable &rv : rdom.domain()) {
-            string p = prefix + rv.var;
-            Expr rmin = Variable::make(Int(32), p + ".min");
-            Expr rmax = Variable::make(Int(32), p + ".max");
-            stmt = LetStmt::make(p + ".loop_min", rmin, stmt);
-            stmt = LetStmt::make(p + ".loop_max", rmax, stmt);
-            stmt = LetStmt::make(p + ".loop_extent", rmax - rmin + 1, stmt);
-        }
+    for (const string &rvar : rvars) {
+        string p = prefix + rvar;
+        Expr rmin = Variable::make(Int(32), p + ".min");
+        Expr rmax = Variable::make(Int(32), p + ".max");
+        stmt = LetStmt::make(p + ".loop_min", rmin, stmt);
+        stmt = LetStmt::make(p + ".loop_max", rmax, stmt);
+        stmt = LetStmt::make(p + ".loop_extent", rmax - rmin + 1, stmt);
     }
 
     return stmt;
@@ -416,7 +415,7 @@ Stmt build_provide_loop_nest(string func_name,
 
     // Default schedule/values if there is no specialization
     Stmt stmt = build_provide_loop_nest_helper(
-        func_name, prefix, dims, site, values, def.schedule(), is_update);
+        func_name, prefix, dims, site, values, def.condition(), def.schedule(), is_update);
 
     // Make any specialized copies
     const vector<Specialization> &specializations = def.specializations();

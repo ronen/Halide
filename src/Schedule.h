@@ -135,16 +135,22 @@ struct Split {
     bool is_fuse() const {return split_type == FuseVars;}
 };
 
-struct Dim {
-    std::string var;
-    ForType for_type;
-    DeviceAPI device_api;
-    bool pure;
-};
-
 struct Bound {
     std::string var;
     Expr min, extent;
+};
+
+struct Dim {
+    Bound bound;
+    ForType for_type;
+    DeviceAPI device_api;
+    bool pure;
+    bool is_rvar;
+
+    std::string &var() { return bound.var; };
+    const std::string &var() const { return bound.var; };
+    const Expr &min() const { return bound.min; };
+    const Expr &extent() const { return bound.extent; };
 };
 
 struct ScheduleContents;
@@ -155,8 +161,6 @@ struct StorageDim {
     Expr fold_factor;
     bool fold_forward;
 };
-
-class ReductionDomain;
 
 struct FunctionContents;
 
@@ -215,12 +219,6 @@ public:
     // @{
     const std::vector<Dim> &dims() const;
     std::vector<Dim> &dims();
-    // @}
-
-    /** Any reduction domain associated with this schedule. */
-    // @{
-    const ReductionDomain &reduction_domain() const;
-    void set_reduction_domain(const ReductionDomain &d);
     // @}
 
     /** The list and order of dimensions used to store this

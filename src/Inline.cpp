@@ -41,15 +41,15 @@ class Inliner : public IRMutator {
             Dim d = s.dims()[i];
             if (d.for_type == ForType::Parallel) {
                 user_error << "Cannot parallelize dimension "
-                           << d.var << " of function "
+                           << d.var() << " of function "
                            << f.name() << " because the function is scheduled inline.\n";
             } else if (d.for_type == ForType::Unrolled) {
                 user_error << "Cannot unroll dimension "
-                           << d.var << " of function "
+                           << d.var() << " of function "
                            << f.name() << " because the function is scheduled inline.\n";
             } else if (d.for_type == ForType::Vectorized) {
                 user_error << "Cannot vectorize dimension "
-                           << d.var << " of function "
+                           << d.var() << " of function "
                            << f.name() << " because the function is scheduled inline.\n";
             }
         }
