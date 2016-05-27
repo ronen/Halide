@@ -586,6 +586,9 @@ Expr raise_to_integer_power(Expr e, int64_t p) {
 }
 
 void split_into_ands(Expr cond, std::vector<Expr> &result) {
+    if (!cond.defined()) {
+        return;
+    }
     internal_assert(cond.type().is_bool()) << "Should be a boolean condition\n";
     if (const And *a = cond.as<And>()) {
         split_into_ands(a->a, result);

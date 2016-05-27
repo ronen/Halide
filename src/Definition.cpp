@@ -21,7 +21,7 @@ struct DefinitionContents {
     Schedule schedule;
     std::vector<Specialization> specializations;
 
-    DefinitionContents() : is_init(true) {}
+    DefinitionContents() : is_init(true), predicate(const_true()) {}
 
     void accept(IRVisitor *visitor) const {
         if (predicate.defined()) {
