@@ -632,13 +632,13 @@ void Function::define_update(const vector<Expr> &_args, vector<Expr> values) {
     string prefix = name() + ".s" + std::to_string(contents->updates.size()+2) + ".";
 
     // First add any reduction domain
-    if (r.domain().defined()) {
-        for (size_t i = 0; i < r.domain().domain().size(); i++) {
+    if (check.reduction_domain.defined()) {
+        for (size_t i = 0; i < check.reduction_domain.domain().size(); i++) {
             // Is this RVar actually pure (safe to parallelize and
             // reorder)? It's pure if one value of the RVar can never
             // access from the same memory that another RVar is
             // writing to.
-            const ReductionVariable &rvar = r.domain().domain()[i];
+            const ReductionVariable &rvar = check.reduction_domain.domain()[i];
             const string &v = rvar.var;
 
             bool pure = can_parallelize_rvar(v, name(), r);
@@ -673,7 +673,7 @@ void Function::define_update(const vector<Expr> &_args, vector<Expr> values) {
     // If there's no recursive reference, no reduction domain, and all
     // the args are pure, then this definition completely hides
     // earlier ones!
-    if (!r.domain().defined() &&
+    if (!check.reduction_domain.defined() &&
         deleter.count == 0 &&
         pure) {
         user_warning

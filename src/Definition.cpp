@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "IR.h"
+#include "IROperator.h"
 #include "IRMutator.h"
 #include "Definition.h"
 #include "Var.h"
@@ -15,7 +16,7 @@ using std::map;
 struct DefinitionContents {
     mutable RefCount ref_count;
     bool is_init;
-    Expr condition;
+    Expr predicate;
     std::vector<Expr> values, args;
     Schedule schedule;
     std::vector<Specialization> specializations;
@@ -23,8 +24,8 @@ struct DefinitionContents {
     DefinitionContents() : is_init(true) {}
 
     void accept(IRVisitor *visitor) const {
-        if (condition.defined()) {
-            condition.accept(visitor);
+        if (predicate.defined()) {
+            predicate.accept(visitor);
         }
 
         for (Expr val : values) {
@@ -45,8 +46,8 @@ struct DefinitionContents {
     }
 
     void mutate(IRMutator *mutator) {
-        if (condition.defined()) {
-            condition = mutator->mutate(condition);
+        if (predicate.defined()) {
+            predicate = mutator->mutate(predicate);
         }
 
         for (size_t i = 0; i < values.size(); ++i) {
@@ -85,10 +86,10 @@ Definition::Definition(const IntrusivePtr<DefinitionContents> &ptr) : contents(p
 }
 
 Definition::Definition(const std::vector<Expr> &args, const std::vector<Expr> &values,
-                       Expr cond, bool is_init)
+                       Expr pred, bool is_init)
                        : contents(new DefinitionContents) {
     contents->is_init = is_init;
-    contents->condition = cond;
+    contents->predicate = pred;
     contents->values = values;
     contents->args = args;
 }
@@ -100,7 +101,7 @@ Definition Definition::deep_copy(
 
     Definition copy;
     copy.contents->is_init = contents->is_init;
-    copy.contents->condition = contents->condition;
+    copy.contents->predicate = contents->predicate;
     copy.contents->values = contents->values;
     copy.contents->args = contents->args;
     copy.contents->schedule = contents->schedule.deep_copy(copied_map);
@@ -143,12 +144,18 @@ const std::vector<Expr> &Definition::values() const {
     return contents->values;
 }
 
-Expr &Definition::condition() {
-    return contents->condition;
+Expr &Definition::predicate() {
+    return contents->predicate;
 }
 
-const Expr &Definition::condition() const {
-    return contents->condition;
+const Expr &Definition::predicate() const {
+    return contents->predicate;
+}
+
+std::vector<Expr> Definition::split_predicate() const {
+    std::vector<Expr> predicates;
+    split_into_ands(contents->predicate, predicates);
+    return predicates;
 }
 
 Schedule &Definition::schedule() {
@@ -171,7 +178,7 @@ const Specialization &Definition::add_specialization(Expr condition) {
     Specialization s;
     s.condition = condition;
     s.definition.contents->is_init = contents->is_init;
-    s.definition.contents->condition = contents->condition;
+    s.definition.contents->predicate = contents->predicate;
     s.definition.contents->values = contents->values;
     s.definition.contents->args   = contents->args;
 

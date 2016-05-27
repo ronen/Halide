@@ -138,6 +138,14 @@ struct Split {
 struct Bound {
     std::string var;
     Expr min, extent;
+
+    /** This lets you use a Bound as a key in a map of the form
+     * map<Bound, Foo, Bound::Compare> */
+    struct Compare {
+        bool operator()(const Bound &a, const Bound &b) const {
+            return a.var < b.var;
+        }
+    };
 };
 
 struct Dim {
@@ -209,13 +217,11 @@ public:
     std::vector<Split> &splits();
     // @}
 
-    /** The list and ordering of dimensions used to evaluate this
-     * function, after all splits have taken place. The first
-     * dimension in the vector corresponds to the innermost for loop,
-     * and the last is the outermost. Also specifies what type of for
-     * loop to use for each dimension. Does not specify the bounds on
-     * each dimension. These get inferred from how the function is
-     * used, what the splits are, and any optional bounds in the list below. */
+    /** The list and ordering of dimensions used to evaluate this function, after
+     * all splits have taken place. The first dimension in the vector corresponds
+     * to the innermost for loop, and the last is the outermost. Also specifies
+     * what type of for loop to use for each dimension and the bounds on each
+     * dimension. */
     // @{
     const std::vector<Dim> &dims() const;
     std::vector<Dim> &dims();
@@ -235,6 +241,19 @@ public:
     // @{
     const std::vector<Bound> &bounds() const;
     std::vector<Bound> &bounds();
+    // @}
+
+    /** The list and ordering of reduction dimensions used to evaluate this
+     * function, after all splits have taken place. The first dimension in the
+     * vector corresponds to the innermost for loop, and the last is the
+     * outermost. Also specifies what type of for loop to use for each dimension
+     * and the bounds on each reduction dimension. */
+    // @{
+    std::vector<Bound> rvar_bounds() const;
+    // @}
+
+    /** Get list of bounds of rvars associated with this Schedule dims. */
+    // @{
     // @}
 
     /** Mark calls of a function by 'f' to be replaced with its wrapper

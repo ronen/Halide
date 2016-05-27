@@ -138,6 +138,16 @@ const std::vector<Bound> &Schedule::bounds() const {
     return contents->bounds;
 }
 
+std::vector<Bound> Schedule::rvar_bounds() const {
+    std::vector<Bound> bounds;
+    for (const Dim &d : contents->dims) {
+        if (d.is_rvar) {
+            bounds.push_back(d.bound);
+        }
+    }
+    return bounds;
+}
+
 const std::map<std::string, IntrusivePtr<Internal::FunctionContents>> &Schedule::wrappers() const {
     return contents->wrappers;
 }

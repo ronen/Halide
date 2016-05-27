@@ -45,7 +45,7 @@ public:
 
     /** Construct a Definition with the supplied args, values, and reduction domain. */
     EXPORT Definition(const std::vector<Expr> &args, const std::vector<Expr> &values,
-                      Expr cond, bool is_init);
+                      Expr pred, bool is_init);
 
     /** Construct an empty Definition. By default, it is a init definition. */
     EXPORT Definition();
@@ -88,11 +88,15 @@ public:
     std::vector<Expr> &values();
     // @}
 
-    /** Get the condition on the definition */
+    /** Get the predicate on the definition */
     // @{
-    const Expr &condition() const;
-    Expr &condition();
+    const Expr &predicate() const;
+    Expr &predicate();
     // @}
+
+    /** Split predicate into vector of ANDs. If there is no predicate (i.e. this
+     * definition is always valid), this returns an empty vector. */
+    EXPORT std::vector<Expr> split_predicate() const;
 
     /** Get the default (no-specialization) schedule associated with this definition. */
     // @{
