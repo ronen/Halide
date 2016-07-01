@@ -181,8 +181,9 @@ struct ModuleState {
 // running a filter.
 struct SavedGLState {
     GLint active_texture;
-          GLint program;
-          GLint viewport[4];
+    GLint program;
+    GLint framebuffer_binding;
+    GLint viewport[4];
     GLboolean cull_face;
     GLboolean depth_test;
 };
@@ -236,6 +237,7 @@ WEAK bool GlobalState::CheckAndReportError(void *user_context, const char *locat
 WEAK void GlobalState::SaveGLState() {
     this->GetIntegerv(GL_ACTIVE_TEXTURE, &(saved_state.active_texture));
     this->GetIntegerv(GL_CURRENT_PROGRAM, &(saved_state.program));
+    this->GetIntegerv(GL_FRAMEBUFFER_BINDING, &(saved_state.framebuffer_binding));
     this->GetIntegerv(GL_VIEWPORT, saved_state.viewport);
     this->GetBooleanv(GL_CULL_FACE, &(saved_state.cull_face));
     this->GetBooleanv(GL_DEPTH_TEST, &(saved_state.depth_test));
@@ -252,6 +254,7 @@ WEAK void GlobalState::RestoreGLState() {
 
     this->ActiveTexture(saved_state.active_texture);
     this->UseProgram(saved_state.program);
+    this->BindFramebuffer(GL_FRAMEBUFFER, saved_state.framebuffer_binding);
     this->Viewport(saved_state.viewport[0], saved_state.viewport[1],
          saved_state.viewport[2], saved_state.viewport[3]);
     (saved_state.cull_face ? this->Enable : this->Disable)(GL_CULL_FACE);
@@ -1208,9 +1211,13 @@ WEAK int halide_opengl_copy_to_host(void *user_context, buffer_t *buf) {
 
     // Ensure that Framebuffer is cleaned up regardless of subsequent return point
     struct FramebufferCleanup {
+        GLint original_framebuffer_id;
+        FramebufferCleanup() {
+            global_state.GetIntegerv(GL_FRAMEBUFFER_BINDING, &original_framebuffer_id);
+        }
         ~FramebufferCleanup() {
             global_state.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-            global_state.BindFramebuffer(GL_FRAMEBUFFER, 0);
+            global_state.BindFramebuffer(GL_FRAMEBUFFER, original_framebuffer_id);
         }
     } framebuffer_cleanup;
 
