@@ -631,6 +631,10 @@ WEAK int halide_opengl_init(void *user_context) {
     USED_GL_FUNCTIONS;
 #undef GLFUNC
 
+    if (global_state.CheckAndReportError(user_context, "halide_opengl_init (context state)")) {
+        return 1;
+    }
+
     const char *version = (const char *)global_state.GetString(GL_VERSION);
     const char *gles_version = match_prefix(version, "OpenGL ES ");
     int major, minor;
@@ -1359,6 +1363,10 @@ WEAK int halide_opengl_run(void *user_context,
                            int num_coords_dim1) {
     if (!global_state.initialized) {
         error(user_context) << "OpenGL runtime not initialized (halide_opengl_run).";
+        return 1;
+    }
+
+    if (global_state.CheckAndReportError(user_context, "halide_opengl_run (incoming state)")) {
         return 1;
     }
 
