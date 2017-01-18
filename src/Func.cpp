@@ -2275,7 +2275,7 @@ Func &Func::shader(Var x, Var y, Var c, DeviceAPI device_api) {
     // GLSL outputs must be stored interleaved
     reorder_storage(c, x, y);
 
-    Stage(func.definition(), name(), args(), func.schedule().storage_dims()).gpu_blocks(x, y, device_api);
+    Stage(func.definition(), name(), args(), func.schedule().storage_dims()).shader(x, y, c, device_api);
 
     // Ensure the channel dimension is bounded
     bool constant_bounds = false;
