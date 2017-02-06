@@ -1716,16 +1716,10 @@ Stage &Stage::gpu_tile(VarOrRVar x, VarOrRVar y, VarOrRVar z,
 
 Stage &Stage::shader(VarOrRVar x, VarOrRVar y, VarOrRVar c, DeviceAPI device_api) {
     reorder(c, x, y);
-    // GLSL outputs must be stored interleaved
-    // No reorder_storage, so we manually reorder
-    vector<StorageDim> reordered_storage;
-    reordered_storage.push_back(storage_dims[2]);
-    reordered_storage.push_back(storage_dims[0]);
-    reordered_storage.push_back(storage_dims[1]);
 
     // TODO: Set appropriate constraints if this is the output buffer?
 
-    Stage(definition, stage_name, dim_vars, reordered_storage).gpu_blocks(x, y, device_api);
+    Stage(definition, stage_name, dim_vars, storage_dims).gpu_blocks(x, y, device_api);
 
     // TODO: In a Stage, we can't access the actual schedule it looks like, only the definition's
     // schedule.  We need some way to check that the channel dimension is constant.
