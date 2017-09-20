@@ -1,6 +1,8 @@
 #include "Halide.h"
 #include <stdio.h>
 
+#include "testing.h"
+
 using namespace Halide;
 
 int main() {
@@ -10,13 +12,9 @@ int main() {
     // Define the input
     const int width = 10, height = 12, channels = 2, res_channels = 2;
     Buffer<float> input(width, height, channels);
-    for (int c = 0; c < input.channels(); c++) {
-        for (int y = 0; y < input.height(); y++) {
-            for (int x = 0; x < input.width(); x++) {
-                input(x, y, c) = float(x + y);
-            }
-        }
-    }
+    input.fill([](int x, int y, int c) {
+        return float(x + y);
+    });
 
     // Define the algorithm.
     Var x, y, c;
@@ -44,36 +42,20 @@ int main() {
     Buffer<uint8_t> result = f.realize(width, height, res_channels, target);
 
     //Check the result.
-    for (int c = 0; c < result.channels(); c++) {
-        for (int y = 0; y < result.height(); y++) {
-            for (int x = 0; x < result.width(); x++) {
-                uint8_t correct = (x>=3 && x<8) ? 11 : 0;
-                if (result(x, y, c) != correct) {
-                    fprintf(stderr, "result(%d, %d, %d) = %d, should be %d\n",
-                            x, y, c, result(x, y, c), correct);
-                    return 1;
-                }
-            }
-        }
+    if (!Testing::check_result<uint8_t>(result, [](int x, int y, int c) {
+            return (x >= 3 && x < 8) ? 11 : 0;
+        })) {
+        return 1;
     }
 
     Buffer<uint8_t> result2 = g.realize(width, height, res_channels, target);
 
     //Check the result.
-    for (int c = 0; c < result2.channels(); c++) {
-        for (int y = 0; y < result2.height(); y++) {
-            for (int x = 0; x < result2.width(); x++) {
-                uint8_t correct = (x>=2 && x<6) ? 9 : 1;
-                if (result2(x, y, c) != correct) {
-                    fprintf(stderr, "result2(%d, %d, %d) = %d, should be %d\n",
-                            x, y, c, result2(x, y, c), correct);
-                    return 1;
-                }
-            }
-        }
+    if (!Testing::check_result<uint8_t>(result2, [](int x, int y, int c) {
+            return (x >= 2 && x < 6) ? 9 : 1;
+        })) {
+        return 1;
     }
-
-
 
     printf("Success!\n");
     return 0;
