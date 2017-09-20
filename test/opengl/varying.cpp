@@ -93,7 +93,7 @@ bool test0(const Target target, Var &x, Var &y, Var &c) {
 
     f0.bound(c, 0, 3);
     f0.glsl(x, y, c);
-    return perform_test("Test0", target, f0, 2, 0.0f, [&](int x, int y, int c) {
+    return perform_test("Test0", target, f0, 1, 0.0f, [&](int x, int y, int c) {
                 switch (c) {
                 case 0: return 4.0f;
                 case 1: return p_value * 10.0f;
@@ -132,7 +132,7 @@ bool test1(const Target target, Var &x, Var &y, Var &c) {
     f1.bound(c, 0, 3);
     f1.glsl(x, y, c);
 
-    return perform_test("Test1", target, f1, 4, 0.000001f, [&](int x, int y, int c) {
+    return perform_test("Test1", target, f1, 2, 0.000001f, [&](int x, int y, int c) {
                 switch (c) {
                     case 0: return m.m[0] * x + m.m[1] * y + m.m[2];
                     case 1: return m.m[3] * x + m.m[4] * y + m.m[5];
@@ -152,7 +152,7 @@ bool test2(const Target target, Var &x, Var &y, Var &c) {
     f2.bound(c, 0, 3);
     f2.glsl(x, y, c);
 
-    return perform_test("Test2", target, f2, 4, 0.000001f, [&](int x, int y, int c) {
+    return perform_test("Test2", target, f2, 2, 0.000001f, [&](int x, int y, int c) {
                 switch (c) {
                     case 0: return sqrtf(m.m[0] * x + m.m[1] * y + m.m[2]);
                     case 1: return sqrtf(m.m[3] * x + m.m[4] * y + m.m[5]);
@@ -185,7 +185,7 @@ bool test3(const Target target, Var &x, Var &y, Var &c) {
     f3.bound(c, 0, 3);
     f3.glsl(x, y, c);
 
-    return perform_test("Test3", target, f3, 2, 0.000001f, [&](int x, int y, int c) {
+    return perform_test("Test3", target, f3, 1, 0.000001f, [&](int x, int y, int c) {
                 switch (c) {
                     case 0: return (float)x + foo_value;
                     case 1: return 1.0f;
