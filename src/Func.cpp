@@ -1719,7 +1719,7 @@ Stage &Stage::shader(VarOrRVar x, VarOrRVar y, VarOrRVar c, DeviceAPI device_api
 
     // TODO: Set appropriate constraints if this is the output buffer?
 
-    Stage(definition, stage_name, dim_vars, storage_dims).gpu_blocks(x, y, device_api);
+    Stage(definition, stage_name, dim_vars, func_schedule).gpu_blocks(x, y, device_api);
 
     // TODO: In a Stage, we can't access the actual schedule it looks like, only the definition's
     // schedule.  We need some way to check that the channel dimension is constant.
@@ -2269,11 +2269,11 @@ Func &Func::shader(Var x, Var y, Var c, DeviceAPI device_api) {
     // GLSL outputs must be stored interleaved
     reorder_storage(c, x, y);
 
-    Stage(func.definition(), name(), args(), func.schedule().storage_dims()).shader(x, y, c, device_api);
+    Stage(func.definition(), name(), args(), func.schedule()).shader(x, y, c, device_api);
 
     // Ensure the channel dimension is bounded
     bool constant_bounds = false;
-    const Schedule &sched = func.schedule();
+    const auto &sched = func.schedule();
     for (size_t i = 0; i < sched.bounds().size(); i++) {
         if (c.name() == sched.bounds()[i].var) {
             constant_bounds = is_const(sched.bounds()[i].min) &&
