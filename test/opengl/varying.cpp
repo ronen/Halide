@@ -32,7 +32,7 @@ std::set<std::string> varyings;
 // names of the variables which are arbitrary.
 extern "C" DLLEXPORT const Variable *record_varying(const Variable *op) {
     if (varyings.find(op->name) == varyings.end()) {
-        fprintf(stderr, "Found varying attribute: %s\n", op->name.c_str());
+        // fprintf(stderr, "Found varying attribute: %s\n", op->name.c_str());
         varyings.insert(op->name);
     }
     return op;
@@ -52,7 +52,7 @@ class CountVarying : public IRMutator {
 };
 
 bool perform_test(const char *label, const Target target, Func f, int expected_nvarying, float tol, std::function<float(int x, int y, int c)> expected_val) {
-    fprintf(stderr, "%s\n", label);
+    //fprintf(stderr, "%s\n", label);
 
     Buffer<float> out(8, 8, 3);
 
@@ -75,7 +75,6 @@ bool perform_test(const char *label, const Target target, Func f, int expected_n
         return false;
     }
 
-    fprintf(stderr, "%s Passed!\n", label);
     return true;
 }
 
@@ -143,6 +142,13 @@ bool test1(const Target target, Var &x, Var &y, Var &c) {
 // The feature is supposed to find linearly varying sub-expressions as well
 // so for example, if the above expressions are wrapped in a non-linear
 // function like sqrt, they should still be extracted.
+//
+// NOTE: The varying checker doesn't count `x` or `y` as varyings, and in
+// this case the codegen is smart enough to figure out the `m?` parameters
+// are uniforms so it doesn't generate any additional varyings since the
+// output is a function of (uniforms) `m?` and varyings `x`,`y`.  So the
+// expected number of varyings is 0.
+//
 bool test2(const Target target, Var &x, Var &y, Var &c) {
     struct CoordXform m;
     Func f2("f2");
@@ -152,7 +158,7 @@ bool test2(const Target target, Var &x, Var &y, Var &c) {
     f2.bound(c, 0, 3);
     f2.glsl(x, y, c);
 
-    return perform_test("Test2", target, f2, 2, 0.000001f, [&](int x, int y, int c) {
+    return perform_test("Test2", target, f2, 0, 0.000001f, [&](int x, int y, int c) {
                 switch (c) {
                     case 0: return sqrtf(m.m[0] * x + m.m[1] * y + m.m[2]);
                     case 1: return sqrtf(m.m[3] * x + m.m[4] * y + m.m[5]);
