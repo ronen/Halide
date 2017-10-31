@@ -10,6 +10,8 @@ endif()
 
 set(RUNTIME_CPP
   aarch64_cpu_features
+  alignment_128
+  alignment_32
   android_clock
   android_host_cpu_count
   android_io
@@ -278,6 +280,7 @@ set(HEADER_FILES
   Deinterleave.h
   DeviceArgument.h
   DeviceInterface.h
+  Dimension.h
   EarlyFree.h
   Elf.h
   EliminateBoolVectors.h
@@ -318,6 +321,7 @@ set(HEADER_FILES
   LLVM_Runtime_Linker.h
   Lambda.h
   Lerp.h
+  LICM.h
   LoopCarry.h
   Lower.h
   MainPage.h
@@ -433,6 +437,7 @@ add_library(Halide ${HALIDE_LIBRARY_TYPE}
   Deinterleave.cpp
   DeviceArgument.cpp
   DeviceInterface.cpp
+  Dimension.cpp
   EarlyFree.cpp
   Elf.cpp
   EliminateBoolVectors.cpp
@@ -467,6 +472,7 @@ add_library(Halide ${HALIDE_LIBRARY_TYPE}
   LLVM_Output.cpp
   LLVM_Runtime_Linker.cpp
   Lerp.cpp
+  LICM.cpp
   LoopCarry.cpp
   Lower.cpp
   MatlabWrapper.cpp

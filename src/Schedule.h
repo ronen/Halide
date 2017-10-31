@@ -163,7 +163,7 @@ public:
 
 namespace Internal {
 
-class IRMutator;
+class IRMutator2;
 struct ReductionVariable;
 
 struct Split {
@@ -291,10 +291,11 @@ public:
     std::vector<Bound> &estimates();
     // @}
 
-    /** Mark calls of a function by 'f' to be replaced with its wrapper
-     * during the lowering stage. If the string 'f' is empty, it means replace
-     * all calls to the function by all other functions (excluding itself) in
-     * the pipeline with the wrapper. See \ref Func::in for more details. */
+    /** Mark calls of a function by 'f' to be replaced with its identity
+     * wrapper or clone during the lowering stage. If the string 'f' is empty,
+     * it means replace all calls to the function by all other functions
+     * (excluding itself) in the pipeline with the global identity wrapper.
+     * See \ref Func::in and \ref Func::clone for more details. */
     // @{
     const std::map<std::string, Internal::FunctionPtr> &wrappers() const;
     std::map<std::string, Internal::FunctionPtr> &wrappers();
@@ -318,9 +319,9 @@ public:
      * Schedule. */
     void accept(IRVisitor *) const;
 
-    /** Pass an IRMutator through to all Exprs referenced in the
+    /** Pass an IRMutator2 through to all Exprs referenced in the
      * Schedule. */
-    void mutate(IRMutator *);
+    void mutate(IRMutator2 *);
 };
 
 
@@ -351,7 +352,7 @@ public:
 
     /** RVars of reduction domain associated with this schedule if there is any. */
     // @{
-    const std::vector<ReductionVariable> &rvars() const;
+    EXPORT const std::vector<ReductionVariable> &rvars() const;
     std::vector<ReductionVariable> &rvars();
     // @}
 
@@ -391,9 +392,9 @@ public:
      * Schedule. */
     void accept(IRVisitor *) const;
 
-    /** Pass an IRMutator through to all Exprs referenced in the
+    /** Pass an IRMutator2 through to all Exprs referenced in the
      * Schedule. */
-    void mutate(IRMutator *);
+    void mutate(IRMutator2 *);
 };
 
 }

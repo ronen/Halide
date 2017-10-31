@@ -30,6 +30,7 @@
 #include "IRMutator.h"
 #include "IROperator.h"
 #include "IRPrinter.h"
+#include "LICM.h"
 #include "LoopCarry.h"
 #include "Memoization.h"
 #include "PartitionLoops.h"
@@ -72,7 +73,7 @@ using std::map;
 
 Module lower(const vector<Function> &output_funcs, const string &pipeline_name, const Target &t,
              const vector<Argument> &args, const Internal::LoweredFunc::LinkageType linkage_type,
-             const vector<IRMutator *> &custom_passes) {
+             const vector<IRMutator2 *> &custom_passes) {
     std::vector<std::string> namespaces;
     std::string simple_pipeline_name = extract_namespaces(pipeline_name, namespaces);
 
@@ -292,6 +293,7 @@ Module lower(const vector<Function> &output_funcs, const string &pipeline_name, 
 
     debug(1) << "Simplifying...\n";
     s = common_subexpression_elimination(s);
+    s = loop_invariant_code_motion(s);
 
     if (t.has_feature(Target::OpenGL)) {
         debug(1) << "Detecting varying attributes...\n";
@@ -376,10 +378,10 @@ Module lower(const vector<Function> &output_funcs, const string &pipeline_name, 
     // We're about to drop the environment and outputs vector, which
     // contain the only strong refs to Functions that may still be
     // pointed to by the IR. So make those refs strong.
-    class StrengthenRefs : public IRMutator {
-        using IRMutator::visit;
-        void visit(const Call *c) {
-            IRMutator::visit(c);
+    class StrengthenRefs : public IRMutator2 {
+        using IRMutator2::visit;
+        Expr visit(const Call *c) override {
+            Expr expr = IRMutator2::visit(c);
             c = expr.as<Call>();
             internal_assert(c);
             if (c->func.defined()) {
@@ -389,6 +391,7 @@ Module lower(const vector<Function> &output_funcs, const string &pipeline_name, 
                                   ptr, c->value_index,
                                   c->image, c->param);
             }
+            return expr;
         }
     };
     s = StrengthenRefs().mutate(s);
@@ -416,7 +419,7 @@ Module lower(const vector<Function> &output_funcs, const string &pipeline_name, 
 }
 
 EXPORT Stmt lower_main_stmt(const std::vector<Function> &output_funcs, const std::string &pipeline_name,
-                            const Target &t, const std::vector<IRMutator *> &custom_passes) {
+                            const Target &t, const std::vector<IRMutator2 *> &custom_passes) {
     // We really ought to start applying for appellation d'origine contrôlée
     // status on types representing arguments in the Halide compiler.
     vector<InferredArgument> inferred_args = infer_arguments(Stmt(), output_funcs);
